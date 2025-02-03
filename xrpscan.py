@@ -110,5 +110,5 @@ total_percentage = (total_balance / 100_000_000_000) * 100
 total_percentage = round(total_percentage, 4)  # Limitar a 3 decimales
 
 # Imprimir resultados
-print(f"Total de Percentage: {total_percentage:.2f}")
+print(f"Total de Percentage: {total_percentage:.4f}")
 print(f"Total de Total Balance: {total_balance}")
