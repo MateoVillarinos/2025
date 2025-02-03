@@ -28,12 +28,17 @@ jobs:
       - name: 🌍 Ejecutar xrpscan.py
         run: python xrpscan.py
 
-      - name: 📊 Ejecutar xrpstat.py
-        run: python xrpstats.py
-
-
       - name: 📤 Subir resultados
         uses: actions/upload-artifact@v4
         with:
           name: XRP Data
           path: "*.csv"
+
+      - name: 📥 Descargar resultados
+        uses: actions/download-artifact@v4
+        with:
+          name: XRP Data
+          path: ./  # Los archivos se descargarán en el directorio actual
+
+      - name: 📊 Ejecutar xrpstats.py
+        run: python xrpstats.py
