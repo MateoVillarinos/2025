@@ -2,6 +2,9 @@ import csv
 import time
 import pandas as pd
 from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -9,6 +12,22 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+# Función para enviar correo
+def send_email(subject, body, to_email):
+    from_email = "mateo.villarinos@gmail.com"  # Cambia esto por tu correo
+    from_password = "ltvj etpn kwpb pyoz"  # Cambia esto por tu contraseña o token de aplicación
+
+    msg = MIMEMultipart()
+    msg["From"] = from_email
+    msg["To"] = to_email
+    msg["Subject"] = subject
+
+    msg.attach(MIMEText(body, "plain"))
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(from_email, from_password)
+        server.sendmail(from_email, to_email, msg.as_string())
 
 # Configuración del navegador
 chrome_options = Options()
@@ -31,11 +50,11 @@ data = []
 page = 1  # Página inicial
 while True:  # Continuar hasta que no haya más páginas
     try:
-        print(f"Extrayendo datos de la página {page}...")
+       # print(f"Extrayendo datos de la página {page}...")
         
         # Extraer las filas de la tabla
         rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//tr[@role='row']")))
-        
+
         for row in rows:
             cells = row.find_elements(By.TAG_NAME, "td")
             if len(cells) == 7:  # Verificar que la fila tenga el número esperado de celdas
@@ -45,9 +64,9 @@ while True:  # Continuar hasta que no haya más páginas
                 balance = cells[4].text
                 xrp_locked = cells[5].text
                 percentage = cells[6].text
-                
+
                 data.append([rank, wallet, owner, balance, xrp_locked, percentage])
-        
+
         # Intentar hacer clic en el botón de siguiente página
         next_buttons = driver.find_elements(By.XPATH, "//button[contains(@class, 'ml-1 mr-1 btn btn-outline-info')]")
         
@@ -56,22 +75,22 @@ while True:  # Continuar hasta que no haya más páginas
             time.sleep(3)  # Espera para asegurar que la página se actualiza
             page += 1
         else:
-            print("No hay más páginas. Finalizando.")
+            #print("No hay más páginas. Finalizando.")
             break
     
     except Exception as e:
-        print(f"Error en la página {page}: {e}")
+        #print(f"Error en la página {page}: {e}")
         break
 
 # Guardar los datos en un archivo CSV
-current_time = datetime.now().strftime("%m-%d_%H")
+current_time = datetime.now().strftime("%m-%d_%H-%M")
 output_file = f"rich_{current_time}hs.csv"
 with open(output_file, mode="w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
     writer.writerow(["Rank", "Wallet", "Owner", "Balance", "XRP Locked", "Percentage"])
     writer.writerows(data)
 
-print(f"Datos extraídos y guardados en {output_file}")
+#print(f"Datos extraídos y guardados en {output_file}")
 
 # Cargar el archivo CSV
 df = pd.read_csv(output_file, dtype=str)  # Cargar todo como string
@@ -101,14 +120,47 @@ df["Total Balance"] = df["Total Balance"].astype("Int64")  # Asegurar tipo bigin
 df.to_csv("fix_" + output_file, index=False)
 
 # Mostrar resultado
-print(df.dtypes)
-print(df.head())
+#print(df.dtypes)
+#print(df.head())
+
+# Cargar el valor anterior de total_balance desde un archivo (si existe)
+try:
+    with open("previous_balance.txt", "r") as f:
+        previous_balance = int(f.read())
+except FileNotFoundError:
+    previous_balance = 0
 
 # Calcular sumas totales
 total_balance = df["Total Balance"].sum()
 total_percentage = (total_balance / 100_000_000_000) * 100
-total_percentage = round(total_percentage, 4)  # Limitar a 3 decimales
+total_percentage = round(total_percentage, 4)  # Limitar a 4 decimales
+
+# Calcular diferencia con el valor anterior
+difference = total_balance - previous_balance
+difference_str = ""
+
+if difference > 0:
+    difference_str = f"Diferencia positiva: {difference}"
+elif difference < 0:
+    difference_str = f"Diferencia negativa: {difference}"
+else:
+    difference_str = "Sin diferencia"
+
 
 # Imprimir resultados
 print(f"Total de Percentage: {total_percentage:.4f}")
 print(f"Total de Total Balance: {total_balance}")
+print(f"Total de Diferencia: {difference_str}")
+
+# Guardar el valor actual como el nuevo "previous_balance"
+with open("previous_balance.txt", "w") as f:
+    f.write(str(total_balance))
+
+# Enviar correo
+subject = f"Informe de Balance - {current_time}"
+body = f"""
+Total Balance: {total_balance}
+Total Percentage: {total_percentage:.4f}
+{difference_str}
+"""
+send_email(subject, body, "mateo.villarinos@gmail.com")
