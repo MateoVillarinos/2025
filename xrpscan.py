@@ -51,7 +51,9 @@ while True:  # Continuar hasta que no haya más páginas
         # Intentar hacer clic en el botón de siguiente página
         next_buttons = driver.find_elements(By.XPATH, "//button[contains(@class, 'ml-1 mr-1 btn btn-outline-info')]")
         
-        if len(next_buttons) > 0 and next_buttons[-1].is_enabled():
+        if page == 2:
+            break
+        elif len(next_buttons) > 0 and next_buttons[-1].is_enabled():
             next_buttons[-1].click()
             time.sleep(3)  # Espera para asegurar que la página se actualiza
             page += 1
