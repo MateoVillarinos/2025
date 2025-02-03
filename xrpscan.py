@@ -50,8 +50,6 @@ data = []
 page = 1  # Página inicial
 while True:  # Continuar hasta que no haya más páginas
     try:
-       # print(f"Extrayendo datos de la página {page}...")
-        
         # Extraer las filas de la tabla
         rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//tr[@role='row']")))
 
@@ -77,11 +75,9 @@ while True:  # Continuar hasta que no haya más páginas
             time.sleep(3)  # Espera para asegurar que la página se actualiza
             page += 1
         else:
-            #print("No hay más páginas. Finalizando.")
             break
     
     except Exception as e:
-        #print(f"Error en la página {page}: {e}")
         break
 
 # Guardar los datos en un archivo CSV
@@ -91,8 +87,6 @@ with open(output_file, mode="w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
     writer.writerow(["Rank", "Wallet", "Owner", "Balance", "XRP Locked", "Percentage"])
     writer.writerows(data)
-
-#print(f"Datos extraídos y guardados en {output_file}")
 
 # Cargar el archivo CSV
 df = pd.read_csv(output_file, dtype=str)  # Cargar todo como string
@@ -120,10 +114,6 @@ df["Total Balance"] = df["Total Balance"].astype("Int64")  # Asegurar tipo bigin
 
 # Guardar el nuevo CSV si es necesario
 df.to_csv("fix_" + output_file, index=False)
-
-# Mostrar resultado
-#print(df.dtypes)
-#print(df.head())
 
 # Cargar el valor anterior de total_balance desde un archivo (si existe)
 try:
