@@ -70,7 +70,9 @@ while True:  # Continuar hasta que no haya más páginas
         # Intentar hacer clic en el botón de siguiente página
         next_buttons = driver.find_elements(By.XPATH, "//button[contains(@class, 'ml-1 mr-1 btn btn-outline-info')]")
         
-        if len(next_buttons) > 0 and next_buttons[-1].is_enabled():
+        if page == 4:
+            break
+        elif len(next_buttons) > 0 and next_buttons[-1].is_enabled():
             next_buttons[-1].click()
             time.sleep(3)  # Espera para asegurar que la página se actualiza
             page += 1
@@ -83,8 +85,8 @@ while True:  # Continuar hasta que no haya más páginas
         break
 
 # Guardar los datos en un archivo CSV
-current_time = datetime.now().strftime("%m-%d_%H-%M")
-output_file = f"rich_{current_time}hs.csv"
+current_time = datetime.now().strftime("%Y-%m-%d_%H-%M")
+output_file = f"rich_{current_time}.csv"
 with open(output_file, mode="w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
     writer.writerow(["Rank", "Wallet", "Owner", "Balance", "XRP Locked", "Percentage"])
