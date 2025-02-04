@@ -117,7 +117,7 @@ df.to_csv("fix_" + output_file, index=False)
 current_time_obj = datetime.strptime(current_time, "%Y-%m-%d_%H-%M")
 
 # Restar 10 minutos a la hora actual
-time_minus_10 = (current_time_obj - timedelta(minutes=10)).strftime("%Y-%m-%d_%H-%M")
+time_minus_10 = (current_time_obj - timedelta(minutes=9)).strftime("%Y-%m-%d_%H-%M")
 
 
 # Leer el balance anterior desde el archivo correspondiente a 10 minutos atrás
