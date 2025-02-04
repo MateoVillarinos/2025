@@ -146,8 +146,6 @@ else:
 
 # Imprimir resultados
 print(f"Total de Percentage: {total_percentage:.4f}")
-print(f"Total de Total Balance: {total_balance}")
-print(f"{difference_str}")
 
 # Enviar correo
 subject = f"Informe de Balance - {current_time}"
