@@ -1,7 +1,7 @@
 import csv
 import time
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -80,7 +80,7 @@ while True:  # Continuar hasta que no haya más páginas
 
 # Guardar los datos en un archivo CSV
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M")
-output_file = f"rich_{current_time}.csv"
+output_file = f"{current_time}.csv"
 with open(output_file, mode="w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
     writer.writerow(["Rank", "Wallet", "Owner", "Balance", "XRP Locked", "Percentage"])
@@ -113,10 +113,14 @@ df["Total Balance"] = df["Total Balance"].astype("Int64")  # Asegurar tipo bigin
 # Guardar el nuevo CSV si es necesario
 df.to_csv("fix_" + output_file, index=False)
 
-# Cargar el valor anterior de total_balance desde un archivo (si existe)
+# Restar 10 minutos a la hora actual
+time_minus_10 = (current_time - timedelta(minutes=10)).strftime("%Y-%m-%d_%H-%M")
+
+# Leer el balance anterior desde el archivo correspondiente a 10 minutos atrás
+previous_file = f"{time_minus_10}.csv"
 try:
-    with open("previous_balance.txt", "r") as f:
-        previous_balance = int(f.read())
+    df_previous = pd.read_csv(previous_file, dtype=str)
+    previous_balance = df_previous["Total Balance"].sum()
 except FileNotFoundError:
     previous_balance = 0
 
@@ -136,15 +140,10 @@ elif difference < 0:
 else:
     difference_str = "Sin diferencia"
 
-
 # Imprimir resultados
 print(f"Total de Percentage: {total_percentage:.4f}")
 print(f"Total de Total Balance: {total_balance}")
-print(f"Total de Diferencia: {difference_str}")
-
-# Guardar el valor actual como el nuevo "previous_balance"
-with open("previous_balance.txt", "w") as f:
-    f.write(str(total_balance))
+print(f"{difference_str}")
 
 # Enviar correo
 subject = f"Informe de Balance - {current_time}"
