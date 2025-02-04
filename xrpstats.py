@@ -1,38 +1,72 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import glob
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 
-# 🗂️ Obtener lista de archivos CSV en la carpeta actual
-csv_files = sorted(glob.glob("fix_rich_*.csv"))
+# Obtener el archivo más reciente generado por xrpscan.py
+csv_files = sorted(glob.glob("fix_*.csv"))
 
-# 📊 Diccionario para almacenar la suma de "percentage" en cada archivo
-percentage_sum = {}
+if not csv_files:
+    print("No se encontraron archivos CSV.")
+    exit()
 
-# 🔄 Procesar cada archivo CSV
-for file in csv_files:
-    # 📅 Extraer la fecha desde el nombre del archivo
-    date = file.split("_")[2] + "_" + file.split("_")[3].split(".")[0]
-    
-    # 📥 Leer el archivo CSV
-    df = pd.read_csv(file)
-    
-    # 🔢 Calcular la nueva columna "percentage"
+latest_file = csv_files[-1]  # Último archivo generado
+
+# Leer el archivo CSV
+try:
+    df = pd.read_csv(latest_file)
     df["Percentage"] = df["Total Balance"] / 100_000_000_000
-    
-    # ➕ Sumar los valores de la nueva columna "Percentage"
-    percentage_sum[date] = df["Percentage"].sum()
+except Exception as e:
+    print(f"Error al leer el archivo CSV: {e}")
+    exit()
 
-# 📅 Convertir los datos en un DataFrame ordenado
-df_plot = pd.DataFrame(list(percentage_sum.items()), columns=["Date", "Total Percentage"])
-df_plot["Date"] = pd.to_datetime(df_plot["Date"], format="%m-%d_%Hhs")  # Ajustar formato de fecha
-df_plot = df_plot.sort_values("Date")
+# Calcular la suma total de "Percentage"
+total_percentage = df["Percentage"].sum()
 
-# 📈 Graficar la evolución de la suma de "Percentage"
+# Crear gráfico
 plt.figure(figsize=(10, 5))
-plt.plot(df_plot["Date"], df_plot["Total Percentage"], marker="o", linestyle="-", color="b")
-plt.xlabel("Fecha")
-plt.ylabel("Suma de Percentage")
-plt.title("Evolución de la Suma de Percentage en el Tiempo")
-plt.xticks(rotation=45)
+plt.plot(df["Percentage"], marker="o", linestyle="-", color="b")
+plt.xlabel("Índice")
+plt.ylabel("Percentage")
+plt.title("Distribución del Percentage en el Último CSV")
 plt.grid(True)
-plt.show()
+
+# Guardar el gráfico como imagen
+plot_filename = "percentage_plot.png"
+plt.savefig(plot_filename)
+plt.close()
+
+# Enviar correo con gráfico adjunto
+from_email = "mateo.villarinos@gmail.com"
+from_password = "ltvj etpn kwpb pyoz"
+to_email = "mateo.villarinos@gmail.com"
+
+subject = "Informe de Percentage"
+body = f"Total Percentage en el último archivo: {total_percentage:.4f}"
+
+msg = MIMEMultipart()
+msg["From"] = from_email
+msg["To"] = to_email
+msg["Subject"] = subject
+msg.attach(MIMEText(body, "plain"))
+
+# Adjuntar gráfico
+with open(plot_filename, "rb") as attachment:
+    part = MIMEBase("application", "octet-stream")
+    part.set_payload(attachment.read())
+    encoders.encode_base64(part)
+    part.add_header("Content-Disposition", f"attachment; filename={plot_filename}")
+    msg.attach(part)
+
+# Enviar el correo
+try:
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(from_email, from_password)
+        server.sendmail(from_email, to_email, msg.as_string())
+    print("Correo enviado correctamente.")
+except Exception as e:
+    print(f"Error al enviar el correo: {e}")
