@@ -87,6 +87,7 @@ df.to_csv(csv_filename, index=False)
 # Evolución del balance
 csv_files = sorted([f for f in os.listdir(DATA_FOLDER) if f.endswith(".csv")])
 historical_data = []
+porcentaje = []
 timestamps = []
 
 for file in csv_files:
@@ -94,15 +95,16 @@ for file in csv_files:
     if "Total Balance" in df_temp.columns:
         total_balance = df_temp["Total Balance"].astype(float).sum()
         historical_data.append(total_balance)
+        porcentaje.append(round((total_balance / 100_000_000_000) * 100, 7))
         timestamps.append(file.replace(".csv", ""))
 
 # Graficar evolución del balance
 plt.figure(figsize=(10, 5))
-plt.plot(timestamps, historical_data, marker="o", linestyle="-", color="b")
+plt.plot(timestamps, porcentaje, marker="o", linestyle="-", color="b")
 plt.xticks(rotation=45, ha="right", fontsize=8)
 plt.xlabel("Tiempo")
-plt.ylabel("Total Balance")
-plt.title("Evolución del Total Balance en XRP")
+plt.ylabel("Posesion del token")
+plt.title("10k rich wallets XRP")
 plt.grid(True)
 
 # Guardar gráfico
@@ -116,13 +118,13 @@ def send_telegram_message(message):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
     requests.post(url, json=payload)
 
-def send_telegram_image(image_path):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-    with open(image_path, "rb") as image:
-        files = {"photo": image}
-        payload = {"chat_id": TELEGRAM_CHAT_ID}
-        requests.post(url, data=payload, files=files)
+#def send_telegram_image(image_path):
+#    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+#    with open(image_path, "rb") as image:
+#        files = {"photo": image}
+#        payload = {"chat_id": TELEGRAM_CHAT_ID}
+#        requests.post(url, data=payload, files=files)
 
-summary_message = f"Total Balance actualizado: {historical_data[-1]:,.0f} XRP"
+summary_message = f"Total Balance actualizado: {historical_data[-1]:,.0f} XRP/nTotal Porcentaje actualizado: {porcentaje[-1]:,.7f}%"
 send_telegram_message(summary_message)
 send_telegram_image(plot_filename)
