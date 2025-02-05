@@ -127,4 +127,4 @@ def send_telegram_message(message):
 
 summary_message = f"Total Balance actualizado: {historical_data[-1]:,.0f} XRP/nTotal Porcentaje actualizado: {porcentaje[-1]:,.7f}%"
 send_telegram_message(summary_message)
-send_telegram_image(plot_filename)
+#send_telegram_image(plot_filename)
