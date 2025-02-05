@@ -1,44 +1,35 @@
-name: top10
+name: XRP Tracker
 
 on:
   schedule:
-    - cron: "*/9 * * * *"  # Ejecuta cada 10 minutos
-  workflow_dispatch:  # Permite ejecución manual
+    - cron: "*/9 * * * *"  # Cada 9 minutos
+  workflow_dispatch:
 
 jobs:
-  run-scripts:
+  run-tracker:
     runs-on: ubuntu-latest
     steps:
       - name: 🛠️ Clonar el repositorio
         uses: actions/checkout@v4
 
-      - name: 🔧 Instalar Google Chrome y ChromeDriver
+      - name: 🔧 Instalar dependencias
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
           wget https://chromedriver.storage.googleapis.com/$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE)/chromedriver_linux64.zip
           unzip chromedriver_linux64.zip
           sudo mv chromedriver /usr/local/bin/
-
-      - name: 🐍 Instalar dependencias de Python
-        run: |
           python -m pip install --upgrade pip
-          pip install pandas selenium matplotlib webdriver-manager
+          pip install pandas selenium matplotlib webdriver-manager requests
 
-      - name: 🌍 Ejecutar xrpscan.py
-        run: python xrpscan.py
+      - name: 🏆 Ejecutar xrp_tracker.py
+        env:
+          TELEGRAM_BOT_TOKEN: "8033440624:AAERKAPpPrQbXEZz_Iqg_sqzDj2_YuI5tS8"
+          TELEGRAM_CHAT_ID: "1057321368"
+        run: python xrp_tracker.py
 
-      - name: 📤 Subir resultados
+      - name: 📤 Subir CSVs
         uses: actions/upload-artifact@v4
         with:
           name: XRP Data
-          path: "*.csv"
-
-      - name: 📥 Descargar resultados
-        uses: actions/download-artifact@v4
-        with:
-          name: XRP Data
-          path: ./  # Los archivos se descargarán en el directorio actual
-
-      - name: 📊 Ejecutar xrpstats.py
-        run: python xrpstats.py
+          path: data/
