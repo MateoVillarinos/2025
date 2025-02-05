@@ -22,11 +22,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas selenium matplotlib webdriver-manager requests
 
-      - name: 🏆 Ejecutar xrp_tracker.py
+      - name: 🏆 Ejecutar xrpscan.py
         env:
           TELEGRAM_BOT_TOKEN: "8033440624:AAERKAPpPrQbXEZz_Iqg_sqzDj2_YuI5tS8"
           TELEGRAM_CHAT_ID: "1057321368"
-        run: python xrp_tracker.py
+        run: python xrpscan.py
 
       - name: 📤 Subir CSVs
         uses: actions/upload-artifact@v4
