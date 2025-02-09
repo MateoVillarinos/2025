@@ -4,19 +4,19 @@ import time
 import pandas as pd
 import requests
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import random
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Obtener credenciales de entorno
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")  # Necesitas una API Key de NewsAPI
 
 # Crear carpeta de datos si no existe
 DATA_FOLDER = "data"
@@ -113,97 +113,49 @@ plot_filename = f"{DATA_FOLDER}/evolucion_balance.png"
 plt.savefig(plot_filename, bbox_inches="tight")
 plt.close()
 
-# Enviar imagen a Telegram
+# Obtener noticias de XRP
+def get_xrp_news():
+    url = f"https://newsapi.org/v2/everything?q=XRP&sortBy=publishedAt&language=en&pageSize=3&apiKey={NEWSAPI_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        articles = response.json().get("articles", [])
+        news_list = [f"🔹 {article['title']} - [Leer más]({article['url']})" for article in articles]
+        return "\n".join(news_list)
+    return "No se encontraron noticias recientes sobre XRP."
+
+xrp_news = get_xrp_news()
+
+# Descargar imagen del gráfico XRP/USDT en M5 desde TradingView
+chart_url = "https://www.tradingview.com/x/your_chart_id/"  # Reemplaza "your_chart_id" con el ID de tu gráfico
+chart_image_path = f"{DATA_FOLDER}/xrp_chart.png"
+response = requests.get(chart_url, stream=True)
+
+if response.status_code == 200:
+    with open(chart_image_path, "wb") as file:
+        for chunk in response.iter_content(1024):
+            file.write(chunk)
+
+# Enviar mensaje a Telegram
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
     requests.post(url, json=payload)
 
-#def send_telegram_image(image_path):
-#    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-#    with open(image_path, "rb") as image:
-#        files = {"photo": image}
-#        payload = {"chat_id": TELEGRAM_CHAT_ID}
-#        requests.post(url, data=payload, files=files)
+def send_telegram_image(image_path):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    with open(image_path, "rb") as image:
+        files = {"photo": image}
+        payload = {"chat_id": TELEGRAM_CHAT_ID}
+        requests.post(url, data=payload, files=files)
 
-# Lista de más de 1000 frases motivadoras
-motivational_quotes = [
-    # ÉXITO Y DINERO
-    "El dinero es solo una herramienta, no un propósito. Tu propósito es lo que realmente te hará millonario.",
-    "El éxito no se mide por la cantidad de dinero, sino por la cantidad de libertad que tienes.",
-    "No trabajes por dinero, haz que el dinero trabaje para ti.",
-    "La riqueza no es cuestión de suerte, sino de estrategia y persistencia.",
-    "Si no construyes tu sueño, alguien te contratará para que ayudes a construir el suyo.",
-    "Ganar dinero mientras duermes es el único camino hacia la libertad financiera.",
-    "No es cuánto ganas, sino cuánto inviertes y multiplicas.",
-    "Tu mentalidad define tu cuenta bancaria.",
-    
-    # MADUREZ Y RESPONSABILIDAD
-    "Ser maduro no significa saberlo todo, sino aprender a vivir con sabiduría.",
-    "La responsabilidad es la clave del respeto y la confianza.",
-    "El verdadero liderazgo comienza con la responsabilidad personal.",
-    "Toma decisiones con la cabeza, pero nunca olvides lo que dicta el corazón.",
-    "Crecer es aprender a ser fuerte sin perder la ternura.",
-    "Cada decisión que tomas hoy es un ladrillo en la construcción de tu futuro.",
-    "Haz lo correcto, incluso cuando nadie te esté mirando.",
-    
-    # AMOR Y FAMILIA
-    "La familia es la riqueza más grande que jamás poseerás.",
-    "El amor no se trata de encontrar a alguien perfecto, sino de ver la perfección en alguien imperfecto.",
-    "Valora a quienes siempre han estado a tu lado, no cuando los necesites, sino porque lo merecen.",
-    "Ama sin miedo, porque cada momento es una oportunidad para ser feliz.",
-    "No hay éxito más grande que ser amado y amar a los tuyos con todo el corazón.",
-    
-    # SALUD Y EJERCICIO
-    "Cuida tu cuerpo, porque es el único lugar en el que tienes que vivir.",
-    "La disciplina en el ejercicio se traduce en disciplina en la vida.",
-    "Un cuerpo fuerte es la base para una mente fuerte.",
-    "La salud es la verdadera riqueza. Sin ella, todo lo demás pierde valor.",
-    "No se trata de ser el más fuerte, sino de ser la mejor versión de ti mismo.",
-    "Cada gota de sudor es un paso más cerca de la mejor versión de ti mismo.",
-    
-    # PASIÓN Y SER ÚNICO
-    "Ser diferente es tu mayor ventaja, no tu debilidad.",
-    "La pasión convierte lo ordinario en extraordinario.",
-    "No te conformes con ser uno más, atrévete a ser único.",
-    "El mundo pertenece a quienes tienen fuego en el alma y determinación en la mirada.",
-    "La pasión es el motor que transforma los sueños en realidades.",
-    "Los que se atreven a ser distintos son los que cambian el mundo.",
-    
-    # BONDAD Y AMABILIDAD
-    "La bondad es un idioma que todos pueden entender.",
-    "Las personas pueden olvidar lo que dijiste, pero nunca olvidarán cómo las hiciste sentir.",
-    "Ser amable no es una debilidad, sino una fortaleza poco común.",
-    "Ayudar a otros no te quita nada, pero sí te enriquece el alma.",
-    "Un acto de bondad, por pequeño que sea, puede cambiar un día, una vida o el mundo.",
-    
-    # MÁS FRASES ALEATORIAS
-    "No esperes el momento perfecto, haz que el momento sea perfecto.",
-    "Cada día es una nueva oportunidad para empezar de nuevo.",
-    "No midas tu vida en años, sino en momentos que te dejen sin aliento.",
-    "El miedo es solo una ilusión, el coraje es real.",
-    "La paciencia y la persistencia convierten lo imposible en inevitable.",
-    "No se trata de cuántas veces caes, sino de cuántas veces te levantas.",
-    "Si quieres resultados diferentes, haz cosas diferentes.",
-    "Las excusas no te acercan a tus metas, la acción sí.",
-    "Tu vida cambia cuando decides que nada volverá a ser igual.",
-    "El esfuerzo de hoy es el éxito de mañana.",
-    "Nada grande se logra sin pasión y dedicación.",
-    "La única forma de fracasar es rendirse.",
-    "Rodéate de personas que te inspiren a crecer.",
-    "Si crees en ti, ya tienes la mitad del camino recorrido.",
-    "Sueña en grande, pero trabaja más grande aún.",
-]
-
-# Seleccionar una frase aleatoria
-motivational_message = random.choice(motivational_quotes)
-
-# Agregar la frase al mensaje de resumen
+# Enviar resumen de datos y noticias
 summary_message = (
-    f"Total Balance actualizado: {historical_data[-1]:,.0f} XRP\n"
-    f"Total Porcentaje actualizado: {porcentaje[-1]:,.7f}%\n\n"
-    f"🌟 {motivational_message} 🌟"
+    f"📊 **Total Balance actualizado:** {historical_data[-1]:,.0f} XRP\n"
+    f"📈 **Total Porcentaje actualizado:** {porcentaje[-1]:,.7f}%\n\n"
+    f"📰 **Últimas noticias sobre XRP:**\n{xrp_news}"
 )
 
 send_telegram_message(summary_message)
-#send_telegram_image(plot_filename)
+send_telegram_image(plot_filename)
+send_telegram_image(chart_image_path)
+
