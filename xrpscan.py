@@ -126,7 +126,7 @@ def get_xrp_news():
 xrp_news = get_xrp_news()
 
 # Descargar imagen del gráfico XRP/USDT en M5 desde TradingView
-chart_url = "https://www.tradingview.com/x/your_chart_id/"  # Reemplaza "your_chart_id" con el ID de tu gráfico
+chart_url = "https://www.tradingview.com/chart/0Nusn9zY/?symbol=BINANCE%3AXRPUSDT"  # Reemplaza "your_chart_id" con el ID de tu gráfico
 chart_image_path = f"{DATA_FOLDER}/xrp_chart.png"
 response = requests.get(chart_url, stream=True)
 
