@@ -83,25 +83,33 @@ df["XRP Locked"] = df["XRP Locked"].apply(to_bigint).astype("Int64")
 df["Percentage"] = df["Percentage"].apply(to_percentage).astype(float)
 df["Total Balance"] = df["Balance"].fillna(0) + df["XRP Locked"].fillna(0)
 
-# Guardar el balance histórico
-history_file = f"{DATA_FOLDER}/history.csv"
-with open(history_file, mode="a", newline="", encoding="utf-8") as file:
-    writer = csv.writer(file)
-    writer.writerow([current_time, df["Total Balance"].sum()])
+df.to_csv(csv_filename, index=False)
 
-# Cargar historial y graficar evolución del balance
-history_df = pd.read_csv(history_file, header=None, names=["Timestamp", "Total Balance"])
-history_df["Timestamp"] = pd.to_datetime(history_df["Timestamp"])
-history_df.set_index("Timestamp", inplace=True)
+# Historial de balances
+history_file = f"{DATA_FOLDER}/historical_data.csv"
+if os.path.exists(history_file):
+    history_df = pd.read_csv(history_file)
+else:
+    history_df = pd.DataFrame(columns=["Timestamp", "Total Balance", "Percentage"])
 
+history_df = pd.concat([history_df, pd.DataFrame({"Timestamp": [current_time], 
+                                                  "Total Balance": [df["Total Balance"].sum()], 
+                                                  "Percentage": [(df["Total Balance"].sum() / 100_000_000_000) * 100]})])
+
+# Corrección del formato de fecha
+history_df["Timestamp"] = pd.to_datetime(history_df["Timestamp"], format="%Y-%m-%d_%H-%M")
+history_df.to_csv(history_file, index=False)
+
+# Graficar evolución del balance
 plt.figure(figsize=(10, 5))
-plt.plot(history_df.index, history_df["Total Balance"], marker="o", linestyle="-", color="b")
+plt.plot(history_df["Timestamp"], history_df["Percentage"], marker="o", linestyle="-", color="b")
 plt.xticks(rotation=45, ha="right", fontsize=8)
 plt.xlabel("Tiempo")
-plt.ylabel("Posesion del token")
+plt.ylabel("Posesion del token (%)")
 plt.title("10k rich wallets XRP")
 plt.grid(True)
 
+# Guardar gráfico
 plot_filename = f"{DATA_FOLDER}/evolucion_balance.png"
 plt.savefig(plot_filename, bbox_inches="tight")
 plt.close()
@@ -118,16 +126,15 @@ def get_xrp_news():
 
 xrp_news = get_xrp_news()
 
-# Obtener precio de XRP/USDT
-def get_xrp_price():
-    url = "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd"
-    response = requests.get(url)
-    if response.status_code == 200:
-        price = response.json().get("ripple", {}).get("usd", "N/A")
-        return price
-    return "Precio no disponible."
+# Descargar imagen del gráfico XRP/USDT en M5 desde TradingView
+chart_url = "https://s3.tradingview.com/snapshots/m/M5XRPUSDT.png" 
+chart_image_path = f"{DATA_FOLDER}/xrp_chart.png"
+response = requests.get(chart_url, stream=True)
 
-xrp_price = get_xrp_price()
+if response.status_code == 200:
+    with open(chart_image_path, "wb") as file:
+        for chunk in response.iter_content(1024):
+            file.write(chunk)
 
 # Enviar mensaje a Telegram
 def send_telegram_message(message):
@@ -142,12 +149,13 @@ def send_telegram_image(image_path):
         payload = {"chat_id": TELEGRAM_CHAT_ID}
         requests.post(url, data=payload, files=files)
 
+# Enviar resumen de datos y noticias
 summary_message = (
     f"📊 **Total Balance actualizado:** {history_df['Total Balance'].iloc[-1]:,.0f} XRP\n"
-    f"💲 **Precio actual XRP/USDT:** ${xrp_price}\n\n"
+    f"📈 **Total Porcentaje actualizado:** {history_df['Percentage'].iloc[-1]:,.7f}%\n\n"
     f"📰 **Últimas noticias sobre XRP:**\n{xrp_news}"
 )
 
 send_telegram_message(summary_message)
 send_telegram_image(plot_filename)
-
+send_telegram_image(chart_image_path)
