@@ -16,7 +16,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 # Obtener credenciales de entorno
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")  # Necesitas una API Key de NewsAPI
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
 # Crear carpeta de datos si no existe
 DATA_FOLDER = "data"
@@ -83,32 +83,25 @@ df["XRP Locked"] = df["XRP Locked"].apply(to_bigint).astype("Int64")
 df["Percentage"] = df["Percentage"].apply(to_percentage).astype(float)
 df["Total Balance"] = df["Balance"].fillna(0) + df["XRP Locked"].fillna(0)
 
-df.to_csv(csv_filename, index=False)
+# Guardar el balance histórico
+history_file = f"{DATA_FOLDER}/history.csv"
+with open(history_file, mode="a", newline="", encoding="utf-8") as file:
+    writer = csv.writer(file)
+    writer.writerow([current_time, df["Total Balance"].sum()])
 
-# Evolución del balance
-csv_files = sorted([f for f in os.listdir(DATA_FOLDER) if f.endswith(".csv")])
-historical_data = []
-porcentaje = []
-timestamps = []
+# Cargar historial y graficar evolución del balance
+history_df = pd.read_csv(history_file, header=None, names=["Timestamp", "Total Balance"])
+history_df["Timestamp"] = pd.to_datetime(history_df["Timestamp"])
+history_df.set_index("Timestamp", inplace=True)
 
-for file in csv_files:
-    df_temp = pd.read_csv(f"{DATA_FOLDER}/{file}", dtype=str)
-    if "Total Balance" in df_temp.columns:
-        total_balance = df_temp["Total Balance"].astype(float).sum()
-        historical_data.append(total_balance)
-        porcentaje.append(round((total_balance / 100_000_000_000) * 100, 7))
-        timestamps.append(file.replace(".csv", ""))
-
-# Graficar evolución del balance
 plt.figure(figsize=(10, 5))
-plt.plot(timestamps, porcentaje, marker="o", linestyle="-", color="b")
+plt.plot(history_df.index, history_df["Total Balance"], marker="o", linestyle="-", color="b")
 plt.xticks(rotation=45, ha="right", fontsize=8)
 plt.xlabel("Tiempo")
 plt.ylabel("Posesion del token")
 plt.title("10k rich wallets XRP")
 plt.grid(True)
 
-# Guardar gráfico
 plot_filename = f"{DATA_FOLDER}/evolucion_balance.png"
 plt.savefig(plot_filename, bbox_inches="tight")
 plt.close()
@@ -125,15 +118,16 @@ def get_xrp_news():
 
 xrp_news = get_xrp_news()
 
-# Descargar imagen del gráfico XRP/USDT en M5 desde TradingView
-chart_url = "https://www.tradingview.com/chart/?symbol=BINANCE%3AXRPUSDT"  # Reemplaza "your_chart_id" con el ID de tu gráfico
-chart_image_path = f"{DATA_FOLDER}/xrp_chart.png"
-response = requests.get(chart_url, stream=True)
+# Obtener precio de XRP/USDT
+def get_xrp_price():
+    url = "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd"
+    response = requests.get(url)
+    if response.status_code == 200:
+        price = response.json().get("ripple", {}).get("usd", "N/A")
+        return price
+    return "Precio no disponible."
 
-if response.status_code == 200:
-    with open(chart_image_path, "wb") as file:
-        for chunk in response.iter_content(1024):
-            file.write(chunk)
+xrp_price = get_xrp_price()
 
 # Enviar mensaje a Telegram
 def send_telegram_message(message):
@@ -148,14 +142,12 @@ def send_telegram_image(image_path):
         payload = {"chat_id": TELEGRAM_CHAT_ID}
         requests.post(url, data=payload, files=files)
 
-# Enviar resumen de datos y noticias
 summary_message = (
-    f"📊 **Total Balance actualizado:** {historical_data[-1]:,.0f} XRP\n"
-    f"📈 **Total Porcentaje actualizado:** {porcentaje[-1]:,.7f}%\n\n"
+    f"📊 **Total Balance actualizado:** {history_df['Total Balance'].iloc[-1]:,.0f} XRP\n"
+    f"💲 **Precio actual XRP/USDT:** ${xrp_price}\n\n"
     f"📰 **Últimas noticias sobre XRP:**\n{xrp_news}"
 )
 
 send_telegram_message(summary_message)
 send_telegram_image(plot_filename)
-send_telegram_image(chart_image_path)
 
