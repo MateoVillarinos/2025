@@ -2,7 +2,6 @@ import os
 import csv
 import time
 import pandas as pd
-import requests
 import matplotlib.pyplot as plt
 from datetime import datetime
 from selenium import webdriver
@@ -16,7 +15,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 # Obtener credenciales de entorno
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
 # Crear carpeta de datos si no existe
 DATA_FOLDER = "data"
@@ -123,28 +121,6 @@ plot_filename = "evolucion_balance.png"
 plt.savefig(plot_filename, bbox_inches="tight")
 plt.close()
 
-# Obtener noticias de XRP
-def get_xrp_news():
-    url = f"https://newsapi.org/v2/everything?q=XRP&sortBy=publishedAt&language=en&pageSize=3&apiKey={NEWSAPI_KEY}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        articles = response.json().get("articles", [])
-        news_list = [f"🔹 {article['title']} - [Leer más]({article['url']})" for article in articles]
-        return "\n".join(news_list)
-    return "No se encontraron noticias recientes sobre XRP."
-
-xrp_news = get_xrp_news()
-
-# Descargar imagen del gráfico XRP/USDT en M5 desde TradingView
-chart_url = "https://s3.tradingview.com/snapshots/m/M5XRPUSDT.png" 
-chart_image_path = "xrp_chart.png"
-response = requests.get(chart_url, stream=True)
-
-if response.status_code == 200:
-    with open(chart_image_path, "wb") as file:
-        for chunk in response.iter_content(1024):
-            file.write(chunk)
-
 # Enviar mensaje a Telegram
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -158,13 +134,11 @@ def send_telegram_image(image_path):
         payload = {"chat_id": TELEGRAM_CHAT_ID}
         requests.post(url, data=payload, files=files)
 
-# Enviar resumen de datos y noticias
+# Enviar resumen de datos
 summary_message = (
     f"📊 **Total Balance actualizado:** {history_df['Total Balance'].iloc[-1]:,.0f} XRP\n"
-    f"📈 **Total Porcentaje actualizado:** {history_df['Percentage'].iloc[-1]:,.7f}%\n\n"
-    f"📰 **Últimas noticias sobre XRP:**\n{xrp_news}"
+    f"📈 **Total Porcentaje actualizado:** {history_df['Percentage'].iloc[-1]:,.7f}%"
 )
 
 send_telegram_message(summary_message)
 send_telegram_image(plot_filename)
-send_telegram_image(chart_image_path)
