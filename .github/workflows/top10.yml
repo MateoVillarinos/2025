@@ -30,7 +30,7 @@ jobs:
 
       - name: 📤 Subir xrp2025.csv a GitHub
         env:
-          TOKEN: ${{ secrets.ACTION_PUSH_TOCKEN }}
+          TOKEN: ${{ secrets.ACTION_XRP}}
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
