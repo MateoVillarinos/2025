@@ -86,15 +86,25 @@ df["Total Balance"] = df["Balance"].fillna(0) + df["XRP Locked"].fillna(0)
 df.to_csv(csv_filename, index=False)
 
 # Historial de balances
-history_file = "historical_data.csv"
+history_file = "xrp2025.csv"
 if os.path.exists(history_file):
     history_df = pd.read_csv(history_file)
 else:
     history_df = pd.DataFrame(columns=["Timestamp", "Total Balance", "Percentage"])
 
-history_df = pd.concat([history_df, pd.DataFrame({"Timestamp": [datetime.now().strftime("%Y-%m-%d_%H-%M")], 
-                                                  "Total Balance": [df["Total Balance"].sum()], 
-                                                  "Percentage": [(df["Total Balance"].sum() / 100_000_000_000) * 100]})])
+# Preparar el nuevo registro
+new_data = {
+    "Timestamp": [datetime.now().strftime("%Y-%m-%d_%H-%M")],
+    "Total Balance": [df["Total Balance"].sum()],
+    "Percentage": [(df["Total Balance"].sum() / 100_000_000_000) * 100]
+}
+
+# Crear un DataFrame con los nuevos datos y asegurarse de que no haya valores vacíos
+new_df = pd.DataFrame(new_data)
+
+# Concatenar solo si hay datos en las columnas (evitar columnas vacías)
+if not new_df.isnull().all().all():  # Verifica si alguna columna tiene datos
+    history_df = pd.concat([history_df, new_df], ignore_index=True)
 
 history_df["Timestamp"] = pd.to_datetime(history_df["Timestamp"], format="%Y-%m-%d_%H-%M")
 history_df.to_csv(history_file, index=False)
