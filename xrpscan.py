@@ -39,6 +39,7 @@ data = []
 while True:
     try:
         rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//tr[@role='row']")))
+
         for row in rows:
             cells = row.find_elements(By.TAG_NAME, "td")
             if len(cells) == 7:
@@ -99,6 +100,62 @@ history_df = pd.concat([history_df, pd.DataFrame({"Timestamp": [current_time],
 history_df["Timestamp"] = pd.to_datetime(history_df["Timestamp"], format="%Y-%m-%d_%H-%M")
 history_df.to_csv(history_file, index=False)
 
-# Guardar datos en xrp2025.csv en el repositorio raíz
-final_csv_filename = "xrp2025.csv"
-history_df[["Timestamp", "Total Balance", "Percentage"]].to_csv(final_csv_filename, index=False)
+# Graficar evolución del balance
+plt.figure(figsize=(10, 5))
+plt.plot(history_df["Timestamp"], history_df["Percentage"], marker="o", linestyle="-", color="b")
+plt.xticks(rotation=45, ha="right", fontsize=8)
+plt.xlabel("Tiempo")
+plt.ylabel("Posesion del token (%)")
+plt.title("10k rich wallets XRP")
+plt.grid(True)
+
+# Guardar gráfico
+plot_filename = f"{DATA_FOLDER}/evolucion_balance.png"
+plt.savefig(plot_filename, bbox_inches="tight")
+plt.close()
+
+# Obtener noticias de XRP
+def get_xrp_news():
+    url = f"https://newsapi.org/v2/everything?q=XRP&sortBy=publishedAt&language=en&pageSize=3&apiKey={NEWSAPI_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        articles = response.json().get("articles", [])
+        news_list = [f"🔹 {article['title']} - [Leer más]({article['url']})" for article in articles]
+        return "\n".join(news_list)
+    return "No se encontraron noticias recientes sobre XRP."
+
+xrp_news = get_xrp_news()
+
+# Descargar imagen del gráfico XRP/USDT en M5 desde TradingView
+chart_url = "https://s3.tradingview.com/snapshots/m/M5XRPUSDT.png" 
+chart_image_path = f"{DATA_FOLDER}/xrp_chart.png"
+response = requests.get(chart_url, stream=True)
+
+if response.status_code == 200:
+    with open(chart_image_path, "wb") as file:
+        for chunk in response.iter_content(1024):
+            file.write(chunk)
+
+# Enviar mensaje a Telegram
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+    requests.post(url, json=payload)
+
+def send_telegram_image(image_path):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    with open(image_path, "rb") as image:
+        files = {"photo": image}
+        payload = {"chat_id": TELEGRAM_CHAT_ID}
+        requests.post(url, data=payload, files=files)
+
+# Enviar resumen de datos y noticias
+summary_message = (
+    f"📊 **Total Balance actualizado:** {history_df['Total Balance'].iloc[-1]:,.0f} XRP\n"
+    f"📈 **Total Porcentaje actualizado:** {history_df['Percentage'].iloc[-1]:,.7f}%\n\n"
+    f"📰 **Últimas noticias sobre XRP:**\n{xrp_news}"
+)
+
+send_telegram_message(summary_message)
+send_telegram_image(plot_filename)
+send_telegram_image(chart_image_path)
