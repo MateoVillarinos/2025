@@ -29,9 +29,11 @@ jobs:
         run: python xrpscan.py
 
       - name: 📤 Subir xrp2025.csv a GitHub
+        env:
+          TOKEN: ${{ secrets.ACTION_PUSH_TOCKEN }}
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add xrp2025.csv
           git commit -m '🔄 Actualización automática de xrp2025.csv'
-          git push origin master
+          git push https://x-access-token:${TOKEN}@github.com/MateoVillarinos/2025.git HEAD:master
