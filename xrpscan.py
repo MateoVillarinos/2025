@@ -62,9 +62,8 @@ while True:
 
 driver.quit()
 
-# Guardar datos en CSV con timestamp
-current_time = datetime.now().strftime("%Y-%m-%d_%H-%M")
-csv_filename = f"{DATA_FOLDER}/{current_time}.csv"
+# Guardar datos en el archivo CSV 'xrp2025.csv'
+csv_filename = "xrp2025.csv"
 with open(csv_filename, mode="w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
     writer.writerow(["Rank", "Wallet", "Owner", "Balance", "XRP Locked", "Percentage"])
@@ -87,13 +86,13 @@ df["Total Balance"] = df["Balance"].fillna(0) + df["XRP Locked"].fillna(0)
 df.to_csv(csv_filename, index=False)
 
 # Historial de balances
-history_file = f"{DATA_FOLDER}/historical_data.csv"
+history_file = "historical_data.csv"
 if os.path.exists(history_file):
     history_df = pd.read_csv(history_file)
 else:
     history_df = pd.DataFrame(columns=["Timestamp", "Total Balance", "Percentage"])
 
-history_df = pd.concat([history_df, pd.DataFrame({"Timestamp": [current_time], 
+history_df = pd.concat([history_df, pd.DataFrame({"Timestamp": [datetime.now().strftime("%Y-%m-%d_%H-%M")], 
                                                   "Total Balance": [df["Total Balance"].sum()], 
                                                   "Percentage": [(df["Total Balance"].sum() / 100_000_000_000) * 100]})])
 
@@ -110,7 +109,7 @@ plt.title("10k rich wallets XRP")
 plt.grid(True)
 
 # Guardar gráfico
-plot_filename = f"{DATA_FOLDER}/evolucion_balance.png"
+plot_filename = "evolucion_balance.png"
 plt.savefig(plot_filename, bbox_inches="tight")
 plt.close()
 
@@ -128,7 +127,7 @@ xrp_news = get_xrp_news()
 
 # Descargar imagen del gráfico XRP/USDT en M5 desde TradingView
 chart_url = "https://s3.tradingview.com/snapshots/m/M5XRPUSDT.png" 
-chart_image_path = f"{DATA_FOLDER}/xrp_chart.png"
+chart_image_path = "xrp_chart.png"
 response = requests.get(chart_url, stream=True)
 
 if response.status_code == 200:
