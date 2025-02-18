@@ -1,6 +1,7 @@
 import os
 import csv
 import time
+import requests
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
