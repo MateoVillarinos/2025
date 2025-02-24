@@ -17,10 +17,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Crear carpeta de datos si no existe
-DATA_FOLDER = "data"
-os.makedirs(DATA_FOLDER, exist_ok=True)
-
 # Configuración del navegador
 chrome_options = Options()
 chrome_options.add_argument("--headless")
@@ -38,16 +34,10 @@ data = []
 while True:
     try:
         rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//tr[@role='row']")))
-
         for row in rows:
             cells = row.find_elements(By.TAG_NAME, "td")
             if len(cells) == 7:
-                rank = cells[0].text
-                wallet = cells[1].text
-                owner = cells[3].text
-                balance = cells[4].text
-                xrp_locked = cells[5].text
-                percentage = cells[6].text
+                rank, wallet, owner, balance, xrp_locked, percentage = [cell.text for cell in cells[:7]]
                 data.append([rank, wallet, owner, balance, xrp_locked, percentage])
 
         next_buttons = driver.find_elements(By.XPATH, "//button[contains(@class, 'ml-1 mr-1 btn btn-outline-info')]")
@@ -63,13 +53,7 @@ driver.quit()
 
 # Guardar datos en el archivo CSV 'xrp2025.csv'
 csv_filename = "xrp2025.csv"
-with open(csv_filename, mode="w", newline="", encoding="utf-8") as file:
-    writer = csv.writer(file)
-    writer.writerow(["Rank", "Wallet", "Owner", "Balance", "XRP Locked", "Percentage"])
-    writer.writerows(data)
-
-# Cargar y limpiar datos
-df = pd.read_csv(csv_filename, dtype=str)
+df = pd.DataFrame(data, columns=["Rank", "Wallet", "Owner", "Balance", "XRP Locked", "Percentage"])
 
 def to_bigint(value):
     return int(value.replace(",", "").replace(" XRP", "")) if pd.notna(value) and value.strip() else None
@@ -85,28 +69,22 @@ df["Total Balance"] = df["Balance"].fillna(0) + df["XRP Locked"].fillna(0)
 df.to_csv(csv_filename, index=False)
 
 # Historial de balances
-history_file = "xrp2025.csv"
-if os.path.exists(history_file):
-    history_df = pd.read_csv(history_file)
+if os.path.exists(csv_filename):
+    history_df = pd.read_csv(csv_filename)
 else:
     history_df = pd.DataFrame(columns=["Timestamp", "Total Balance", "Percentage"])
 
-# Preparar el nuevo registro
 new_data = {
     "Timestamp": [datetime.now().strftime("%Y-%m-%d_%H-%M")],
     "Total Balance": [df["Total Balance"].sum()],
     "Percentage": [(df["Total Balance"].sum() / 100_000_000_000) * 100]
 }
-
-# Crear un DataFrame con los nuevos datos y asegurarse de que no haya valores vacíos
 new_df = pd.DataFrame(new_data)
 
-# Concatenar solo si hay datos en las columnas (evitar columnas vacías)
-if not new_df.isnull().all().all():  # Verifica si alguna columna tiene datos
+if not new_df.isnull().all().all():
     history_df = pd.concat([history_df, new_df], ignore_index=True)
 
-history_df["Timestamp"] = pd.to_datetime(history_df["Timestamp"], format="%Y-%m-%d_%H-%M")
-history_df.to_csv(history_file, index=False)
+history_df.to_csv(csv_filename, index=False)
 
 # Graficar evolución del balance
 plt.figure(figsize=(10, 5))
@@ -135,7 +113,6 @@ def send_telegram_image(image_path):
         payload = {"chat_id": TELEGRAM_CHAT_ID}
         requests.post(url, data=payload, files=files)
 
-# Enviar resumen de datos
 summary_message = (
     f"📊 **Total Balance actualizado:** {history_df['Total Balance'].iloc[-1]:,.0f} XRP\n"
     f"📈 **Total Porcentaje actualizado:** {history_df['Percentage'].iloc[-1]:,.7f}%"
