@@ -33,16 +33,17 @@ jobs:
         env:
           TOKEN: ${{ secrets.ACTION_XRP }}
         run: |
-          git config --global user.name "${{ github.actor }}"
-          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --global user.name "MateoVillarinos"
+          git config --global user.email "MateoVillarinos@users.noreply.github.com"
           git pull origin master || true
 
           FILES=$(ls metricas_xrp_*.csv xrp2025_*.csv grafico_metricas_xrp_*.png 2>/dev/null || true)
           if [ -n "$FILES" ]; then
             git add $FILES
             git commit -m "📈 Auto update - $(date +'%Y-%m-%d %H:%M')" || echo "Sin cambios"
-            git push https://${{ github.actor }}:${TOKEN}@github.com/${{ github.repository }}.git HEAD:master
+            git push https://MateoVillarinos:${TOKEN}@github.com/MateoVillarinos/2025.git HEAD:master
           else
             echo "🟢 No se encontraron archivos para subir."
           fi
+
 
