@@ -2,12 +2,13 @@ name: XRP Tracker
 
 on:
   schedule:
-    - cron: "* * * * *"  # Cada 9 minutos
+    - cron: "*/10 * * * *"  # Cada 10 minutos
   workflow_dispatch:
 
 jobs:
   run-tracker:
     runs-on: ubuntu-latest
+
     steps:
       - name: 🛠️ Clonar el repositorio
         uses: actions/checkout@v4
@@ -22,18 +23,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas selenium matplotlib webdriver-manager requests
 
-      - name: 🏆 Ejecutar xrpscan.py
+      - name: 🏆 Ejecutar xrp.py
         env:
-          TELEGRAM_BOT_TOKEN: "8033440624:AAERKAPpPrQbXEZz_Iqg_sqzDj2_YuI5tS8"
-          TELEGRAM_CHAT_ID: "1057321368"
-        run: python xrpscan.py
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python xrp.py
 
-      - name: 📤 Subir xrp2025.csv a GitHub
+      - name: 📤 Subir archivos generados al repositorio
         env:
           TOKEN: ${{ secrets.ACTION_XRP }}
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add xrp2025.csv evolucion_balance.png
-          git commit -m '🔄 Actualización automática de xrp2025.csv y gráfico'
-          git push https://x-access-token:${TOKEN}@github.com/MateoVillarinos/2025.git HEAD:master
+          git add xrp2025.csv xrp_backup.csv metricas_xrp.csv evolucion_balance.png grafico_metricas_xrp.png || true
+          git commit -m "📊 Auto update - $(date +'%Y-%m-%d %H:%M')" || echo "Sin cambios para commitear"
+          git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }} HEAD:master
