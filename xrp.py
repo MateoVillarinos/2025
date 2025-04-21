@@ -1,5 +1,6 @@
 import os
 import time
+import glob
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -16,12 +17,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
     requests.post(url, json=payload)
-
 
 def send_telegram_image(image_path):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
@@ -29,7 +28,6 @@ def send_telegram_image(image_path):
         files = {"photo": image}
         payload = {"chat_id": TELEGRAM_CHAT_ID}
         requests.post(url, data=payload, files=files)
-
 
 # --- CHROME SETUP ---
 chrome_options = Options()
@@ -87,7 +85,6 @@ driver.quit()
 # --- CREACIÓN DE DATAFRAME ---
 df = pd.DataFrame(data, columns=["Rank", "Wallet", "Owner", "Balance", "XRP Locked"])
 
-
 def to_bigint(value):
     try:
         value = str(value).replace(",", "").replace(" XRP", "").strip()
@@ -100,22 +97,22 @@ df["Balance"] = df["Balance"].apply(to_bigint)
 df["XRP Locked"] = df["XRP Locked"].apply(to_bigint)
 df["Total Balance"] = df["Balance"] + df["XRP Locked"]
 
-csv_filename = "xrp2025.csv"
-df.to_csv(csv_filename, index=False)
-
 # --- MÉTRICAS ---
 total_locked = df["XRP Locked"].sum()
 total_circulante = df["Balance"].sum()
-total_supply = 100_000_000_000  # Fijo
+total_supply = 100_000_000_000  # Suministro fijo
 
 pct_top10 = df.head(10)["Total Balance"].sum() / total_supply * 100
 pct_top100 = df.head(100)["Total Balance"].sum() / total_supply * 100
 pct_top1000 = df.head(1000)["Total Balance"].sum() / total_supply * 100
 pct_top10000 = df.head(10000)["Total Balance"].sum() / total_supply * 100
 
-# --- HISTÓRICO MÉTRICAS ---
-timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-metric_file = "metricas_xrp.csv"
+# --- GUARDAR CSV Y PNG CON TIMESTAMP ---
+timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+metric_filename = f"metricas_xrp_{timestamp}.csv"
+df_filename = f"xrp2025_{timestamp}.csv"
+df.to_csv(df_filename, index=False)
+
 new_metric = {
     "Timestamp": timestamp,
     "Top10Pct": round(pct_top10, 2),
@@ -124,28 +121,28 @@ new_metric = {
     "Top10000Pct": round(pct_top10000, 2)
 }
 
-if os.path.exists(metric_file):
-    metric_df = pd.read_csv(metric_file)
-else:
-    metric_df = pd.DataFrame(columns=new_metric.keys())
+pd.DataFrame([new_metric]).to_csv(metric_filename, index=False)
 
-metric_df = pd.concat([metric_df, pd.DataFrame([new_metric])], ignore_index=True)
-metric_df.to_csv(metric_file, index=False)
+# --- LEER TODOS LOS HISTÓRICOS ---
+csv_files = sorted(glob.glob("metricas_xrp_*.csv"))
+all_metrics = pd.concat([pd.read_csv(f) for f in csv_files], ignore_index=True)
 
-# --- GRAFICO DE MÉTRICAS ---
+# --- GRAFICO DE LÍNEAS HISTÓRICO ---
 plt.figure(figsize=(12, 6))
-plt.plot(metric_df["Timestamp"], metric_df["Top10Pct"], label="Top 10%")
-plt.plot(metric_df["Timestamp"], metric_df["Top100Pct"], label="Top 100%")
-plt.plot(metric_df["Timestamp"], metric_df["Top1000Pct"], label="Top 1.000%")
-plt.plot(metric_df["Timestamp"], metric_df["Top10000Pct"], label="Top 10.000%")
+plt.plot(all_metrics["Timestamp"], all_metrics["Top10Pct"], label="Top 10%")
+plt.plot(all_metrics["Timestamp"], all_metrics["Top100Pct"], label="Top 100%")
+plt.plot(all_metrics["Timestamp"], all_metrics["Top1000Pct"], label="Top 1.000%")
+plt.plot(all_metrics["Timestamp"], all_metrics["Top10000Pct"], label="Top 10.000%")
 plt.xticks(rotation=45, ha="right", fontsize=8)
 plt.xlabel("Fecha")
 plt.ylabel("% de Supply")
-plt.title("Distribución XRP por Ballenas")
+plt.title("Evolución de concentración XRP")
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
-plt.savefig("grafico_metricas_xrp.png")
+
+graph_filename = f"grafico_metricas_xrp_{timestamp}.png"
+plt.savefig(graph_filename)
 plt.close()
 
 # --- MENSAJE TELEGRAM ---
@@ -161,4 +158,4 @@ summary_message = (
 )
 
 send_telegram_message(summary_message)
-send_telegram_image("grafico_metricas_xrp.png")
+send_telegram_image(graph_filename)

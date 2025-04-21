@@ -35,6 +35,6 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add xrp2025.csv xrp_backup.csv metricas_xrp.csv evolucion_balance.png grafico_metricas_xrp.png || true
-          git commit -m "📊 Auto update - $(date +'%Y-%m-%d %H:%M')" || echo "Sin cambios para commitear"
+          git add metricas_xrp_*.csv xrp2025_*.csv grafico_metricas_xrp_*.png || true
+          git commit -m "📈 Auto update - $(date +'%Y-%m-%d %H:%M')" || echo "Sin cambios para commitear"
           git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }} HEAD:master
