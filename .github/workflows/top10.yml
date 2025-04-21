@@ -2,7 +2,7 @@ name: XRP Tracker
 
 on:
   schedule:
-    - cron: "*/10 * * * *"  # Cada 10 minutos
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -29,12 +29,19 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python xrp.py
 
-      - name: 📤 Subir archivos generados al repositorio
+      - name: 📤 Subir archivos generados con timestamp
         env:
           TOKEN: ${{ secrets.ACTION_XRP }}
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add metricas_xrp_*.csv xrp2025_*.csv grafico_metricas_xrp_*.png || true
-          git commit -m "📈 Auto update - $(date +'%Y-%m-%d %H:%M')" || echo "Sin cambios para commitear"
-          git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }} HEAD:master
+
+          FILES_CHANGED=$(git status --porcelain | grep -E 'metricas_xrp_.*\\.csv|xrp2025_.*\\.csv|grafico_metricas_xrp_.*\\.png' || true)
+
+          if [ -n "$FILES_CHANGED" ]; then
+            git add metricas_xrp_*.csv xrp2025_*.csv grafico_metricas_xrp_*.png
+            git commit -m "📈 Auto update - $(date +'%Y-%m-%d %H:%M')"
+            git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }} HEAD:master
+          else
+            echo \"🟢 No hay cambios nuevos para pushear.\"
+          fi
