@@ -35,13 +35,14 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git pull origin master || true
 
-          FILES_CHANGED=$(git status --porcelain | grep -E 'metricas_xrp_.*\\.csv|xrp2025_.*\\.csv|grafico_metricas_xrp_.*\\.png' || true)
-
-          if [ -n "$FILES_CHANGED" ]; then
-            git add metricas_xrp_*.csv xrp2025_*.csv grafico_metricas_xrp_*.png
-            git commit -m "📈 Auto update - $(date +'%Y-%m-%d %H:%M')"
+          FILES=$(ls metricas_xrp_*.csv xrp2025_*.csv grafico_metricas_xrp_*.png 2>/dev/null || true)
+          if [ -n "$FILES" ]; then
+            git add $FILES
+            git commit -m "📈 Auto update - $(date +'%Y-%m-%d %H:%M')" || echo "Sin cambios"
             git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }} HEAD:master
           else
-            echo \"🟢 No hay cambios nuevos para pushear.\"
+            echo "🟢 No se encontraron archivos para subir."
           fi
+

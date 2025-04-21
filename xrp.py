@@ -1,6 +1,7 @@
 import os
 import time
 import glob
+import re
 import requests
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -17,9 +18,16 @@ from webdriver_manager.chrome import ChromeDriverManager
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+def escape_md(text):
+    return re.sub(r'([_*\[\]()~`>#+=|{}.!-])', r'\\\1', str(text))
+
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": escape_md(message),
+        "parse_mode": "MarkdownV2"
+    }
     requests.post(url, json=payload)
 
 def send_telegram_image(image_path):
@@ -91,7 +99,6 @@ def to_bigint(value):
         return int(value) if value.replace(".", "").isdigit() else 0
     except:
         return 0
-
 
 df["Balance"] = df["Balance"].apply(to_bigint)
 df["XRP Locked"] = df["XRP Locked"].apply(to_bigint)
