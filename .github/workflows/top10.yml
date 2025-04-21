@@ -2,7 +2,7 @@ name: XRP Tracker
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/10 * * * *"  # Corre cada 10 minutos
   workflow_dispatch:
 
 jobs:
@@ -29,19 +29,19 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python xrp.py
 
-      - name: 📤 Subir archivos generados con timestamp
+      - name: 📤 Subir archivos generados con timestamp al repositorio
         env:
           TOKEN: ${{ secrets.ACTION_XRP }}
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
           git pull origin master || true
 
           FILES=$(ls metricas_xrp_*.csv xrp2025_*.csv grafico_metricas_xrp_*.png 2>/dev/null || true)
           if [ -n "$FILES" ]; then
             git add $FILES
             git commit -m "📈 Auto update - $(date +'%Y-%m-%d %H:%M')" || echo "Sin cambios"
-            git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }} HEAD:master
+            git push https://${{ github.actor }}:${TOKEN}@github.com/${{ github.repository }}.git HEAD:master
           else
             echo "🟢 No se encontraron archivos para subir."
           fi
