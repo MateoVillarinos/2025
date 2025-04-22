@@ -21,29 +21,12 @@ jobs:
           unzip chromedriver_linux64.zip
           sudo mv chromedriver /usr/local/bin/
           python -m pip install --upgrade pip
-          pip install pandas selenium matplotlib webdriver-manager requests
+          pip install pandas selenium matplotlib webdriver-manager requests \
+                      google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
 
       - name: 🏆 Ejecutar xrp.py
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
         run: python xrp.py
-
-      - name: 📤 Subir archivos generados con timestamp al repositorio
-        env:
-          TOKEN: ${{ secrets.ACTION_XRP }}
-        run: |
-          git config --global user.name "MateoVillarinos"
-          git config --global user.email "MateoVillarinos@users.noreply.github.com"
-          git pull origin master || true
-
-          FILES=$(ls metricas_xrp_*.csv xrp2025_*.csv grafico_metricas_xrp_*.png 2>/dev/null || true)
-          if [ -n "$FILES" ]; then
-            git add $FILES
-            git commit -m "📈 Auto update - $(date +'%Y-%m-%d %H:%M')" || echo "Sin cambios"
-            git push https://MateoVillarinos:${TOKEN}@github.com/MateoVillarinos/2025.git HEAD:master
-          else
-            echo "🟢 No se encontraron archivos para subir."
-          fi
-
-

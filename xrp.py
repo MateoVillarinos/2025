@@ -1,6 +1,9 @@
 import os
+import io
 import time
 import glob
+import json
+import base64
 import re
 import requests
 import pandas as pd
@@ -13,13 +16,19 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
-# --- TELEGRAM ---
+# --- CONFIGURACIÓN ---
+FOLDER_ID = "100_a_f6OG3h-3FfA7y3mvg3td3aMUiMn"
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+GDRIVE_CREDENTIALS = os.getenv("GDRIVE_CREDENTIALS")
 
+# --- FUNCIONES DE TELEGRAM ---
 def escape_md(text):
-    return re.sub(r'([_*\[\]()~`>#+=|{}.!-])', r'\\\1', str(text))
+    return re.sub(r'([_\*\[\]()~`>#+=|{}.!-])', r'\\\1', str(text))
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -36,6 +45,30 @@ def send_telegram_image(image_path):
         files = {"photo": image}
         payload = {"chat_id": TELEGRAM_CHAT_ID}
         requests.post(url, data=payload, files=files)
+
+# --- AUTENTICACIÓN GOOGLE DRIVE ---
+creds_json = json.loads(GDRIVE_CREDENTIALS)
+creds = service_account.Credentials.from_service_account_info(creds_json, scopes=["https://www.googleapis.com/auth/drive"])
+drive_service = build("drive", "v3", credentials=creds)
+
+def upload_to_drive(filename, mimetype):
+    file_metadata = {"name": filename, "parents": [FOLDER_ID]}
+    media = MediaIoBaseUpload(open(filename, "rb"), mimetype=mimetype)
+    drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+
+def list_drive_csv_files():
+    results = drive_service.files().list(q=f"'{FOLDER_ID}' in parents and name contains 'metricas_xrp_' and mimeType='text/csv'", fields="files(id, name)").execute()
+    return results.get("files", [])
+
+def download_csv_from_drive(file_id):
+    request = drive_service.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    fh.seek(0)
+    return pd.read_csv(fh)
 
 # --- CHROME SETUP ---
 chrome_options = Options()
@@ -107,32 +140,39 @@ df["Total Balance"] = df["Balance"] + df["XRP Locked"]
 # --- MÉTRICAS ---
 total_locked = df["XRP Locked"].sum()
 total_circulante = df["Balance"].sum()
-total_supply = 100_000_000_000  # Suministro fijo
+total_supply = 100_000_000_000
 
 pct_top10 = df.head(10)["Total Balance"].sum() / total_supply * 100
 pct_top100 = df.head(100)["Total Balance"].sum() / total_supply * 100
 pct_top1000 = df.head(1000)["Total Balance"].sum() / total_supply * 100
 pct_top10000 = df.head(10000)["Total Balance"].sum() / total_supply * 100
 
-# --- GUARDAR CSV Y PNG CON TIMESTAMP ---
+# --- GUARDAR Y SUBIR A DRIVE ---
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
 metric_filename = f"metricas_xrp_{timestamp}.csv"
 df_filename = f"xrp2025_{timestamp}.csv"
-df.to_csv(df_filename, index=False)
+graph_filename = f"grafico_metricas_xrp_{timestamp}.png"
 
-new_metric = {
+# Guardar local
+new_metric = pd.DataFrame([{
     "Timestamp": timestamp,
     "Top10Pct": round(pct_top10, 2),
     "Top100Pct": round(pct_top100, 2),
     "Top1000Pct": round(pct_top1000, 2),
     "Top10000Pct": round(pct_top10000, 2)
-}
+}])
 
-pd.DataFrame([new_metric]).to_csv(metric_filename, index=False)
+new_metric.to_csv(metric_filename, index=False)
+df.to_csv(df_filename, index=False)
 
-# --- LEER TODOS LOS HISTÓRICOS ---
-csv_files = sorted(glob.glob("metricas_xrp_*.csv"))
-all_metrics = pd.concat([pd.read_csv(f) for f in csv_files], ignore_index=True)
+# Subir a Drive
+upload_to_drive(metric_filename, "text/csv")
+upload_to_drive(df_filename, "text/csv")
+
+# --- DESCARGAR HISTÓRICO DESDE DRIVE ---
+all_files = list_drive_csv_files()
+all_dfs = [download_csv_from_drive(f["id"]) for f in all_files]
+all_metrics = pd.concat(all_dfs, ignore_index=True).sort_values("Timestamp")
 
 # --- GRAFICO DE LÍNEAS HISTÓRICO ---
 plt.figure(figsize=(12, 6))
@@ -147,12 +187,12 @@ plt.title("Evolución de concentración XRP")
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
-
-graph_filename = f"grafico_metricas_xrp_{timestamp}.png"
 plt.savefig(graph_filename)
 plt.close()
 
-# --- MENSAJE TELEGRAM ---
+upload_to_drive(graph_filename, "image/png")
+
+# --- TELEGRAM ---
 summary_message = (
     f"🧠 *XRP Smart Report*\n"
     f"🕓 {timestamp}\n"
