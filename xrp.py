@@ -1,9 +1,7 @@
 import os
 import io
 import time
-import glob
 import json
-import base64
 import re
 import requests
 import pandas as pd
@@ -32,17 +30,20 @@ def escape_md(text):
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": escape_md(message),
-        "parse_mode": "MarkdownV2"
-    }
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": escape_md(message), "parse_mode": "MarkdownV2"}
     requests.post(url, json=payload)
 
 def send_telegram_image(image_path):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
     with open(image_path, "rb") as image:
         files = {"photo": image}
+        payload = {"chat_id": TELEGRAM_CHAT_ID}
+        requests.post(url, data=payload, files=files)
+
+def send_telegram_document(file_path):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
+    with open(file_path, "rb") as file:
+        files = {"document": file}
         payload = {"chat_id": TELEGRAM_CHAT_ID}
         requests.post(url, data=payload, files=files)
 
@@ -70,16 +71,53 @@ def download_csv_from_drive(file_id):
     fh.seek(0)
     return pd.read_csv(fh)
 
-# --- CHROME SETUP ---
+def get_last_metric_file():
+    files = list_drive_csv_files()
+    if not files:
+        return None, None
+    sorted_files = sorted(files, key=lambda x: x["name"], reverse=True)
+    last_file = sorted_files[0]
+    last_df = download_csv_from_drive(last_file["id"])
+    return last_file["name"], last_df
+
+def metrics_are_different(new_metrics, last_metrics):
+    if last_metrics is None:
+        return True
+    last_row = last_metrics.iloc[-1]
+    return not (
+        new_metrics["Top10Pct"].iloc[0] == last_row["Top10Pct"] and
+        new_metrics["Top100Pct"].iloc[0] == last_row["Top100Pct"] and
+        new_metrics["Top1000Pct"].iloc[0] == last_row["Top1000Pct"] and
+        new_metrics["Top10000Pct"].iloc[0] == last_row["Top10000Pct"]
+    )
+
+def get_last_balance_file():
+    results = drive_service.files().list(q=f"'{FOLDER_ID}' in parents and name contains 'xrp2025_' and mimeType='text/csv'", fields="files(id, name)").execute()
+    files = results.get("files", [])
+    if not files:
+        return None, None
+    sorted_files = sorted(files, key=lambda x: x["name"], reverse=True)
+    last_file = sorted_files[0]
+    last_df = download_csv_from_drive(last_file["id"])
+    return last_file["name"], last_df
+
+def compare_wallets(df_new, df_old):
+    df_old = df_old[["Wallet", "Owner", "Total Balance"]].rename(columns={"Total Balance": "Old Balance"})
+    df_new = df_new[["Wallet", "Owner", "Total Balance"]].rename(columns={"Total Balance": "New Balance"})
+    merged = pd.merge(df_old, df_new, on="Wallet", how="outer", suffixes=("_old", "_new"))
+    merged["Balance Change"] = merged["New Balance"].fillna(0) - merged["Old Balance"].fillna(0)
+    changes = merged[merged["Balance Change"] != 0].copy()
+    changes["Owner"] = changes["Owner_old"].combine_first(changes["Owner_new"])
+    return changes[["Wallet", "Owner", "Old Balance", "New Balance", "Balance Change"]].sort_values("Balance Change", ascending=False)
+
+# --- SCRAPING ---
 chrome_options = Options()
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--no-sandbox")
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
-# --- SCRAPING ---
-url = "https://xrpscan.com/balances"
-driver.get(url)
+driver.get("https://xrpscan.com/balances")
 wait = WebDriverWait(driver, 3)
 
 data = []
@@ -89,28 +127,12 @@ while True:
         for row in rows:
             cells = row.find_elements(By.TAG_NAME, "td")
             if len(cells) >= 6:
-                try:
-                    rank = cells[0].text.strip()
-                    try:
-                        wallet = cells[1].find_element(By.TAG_NAME, "a").text.strip()
-                    except:
-                        wallet = cells[1].text.strip()
-
-                    owner = cells[3].text.strip()
-
-                    try:
-                        balance = cells[4].find_element(By.CLASS_NAME, "money").find_element(By.TAG_NAME, "span").text.strip().replace(",", "")
-                    except:
-                        balance = "0"
-
-                    try:
-                        xrp_locked = cells[5].find_element(By.CLASS_NAME, "money").find_element(By.TAG_NAME, "span").text.strip().replace(",", "")
-                    except:
-                        xrp_locked = "0"
-
-                    data.append([rank, wallet, owner, balance, xrp_locked])
-                except Exception as e:
-                    print("Error extrayendo fila:", e)
+                rank = cells[0].text.strip()
+                wallet = cells[1].text.strip() if not cells[1].find_elements(By.TAG_NAME, "a") else cells[1].find_element(By.TAG_NAME, "a").text.strip()
+                owner = cells[3].text.strip()
+                balance = cells[4].text.strip().replace(",", "") if cells[4].find_elements(By.CLASS_NAME, "money") else "0"
+                xrp_locked = cells[5].text.strip().replace(",", "") if cells[5].find_elements(By.CLASS_NAME, "money") else "0"
+                data.append([rank, wallet, owner, balance, xrp_locked])
 
         next_buttons = driver.find_elements(By.XPATH, "//button[contains(@class, 'ml-1 mr-1 btn btn-outline-info')]")
         if next_buttons and next_buttons[-1].is_enabled():
@@ -123,7 +145,7 @@ while True:
 
 driver.quit()
 
-# --- CREACIÓN DE DATAFRAME ---
+# --- PROCESAMIENTO DE DATOS ---
 df = pd.DataFrame(data, columns=["Rank", "Wallet", "Owner", "Balance", "XRP Locked"])
 
 def to_bigint(value):
@@ -137,7 +159,6 @@ df["Balance"] = df["Balance"].apply(to_bigint)
 df["XRP Locked"] = df["XRP Locked"].apply(to_bigint)
 df["Total Balance"] = df["Balance"] + df["XRP Locked"]
 
-# --- MÉTRICAS ---
 total_locked = df["XRP Locked"].sum()
 total_circulante = df["Balance"].sum()
 total_supply = 100_000_000_000
@@ -147,13 +168,10 @@ pct_top100 = df.head(100)["Total Balance"].sum() / total_supply * 100
 pct_top1000 = df.head(1000)["Total Balance"].sum() / total_supply * 100
 pct_top10000 = df.head(10000)["Total Balance"].sum() / total_supply * 100
 
-# --- GUARDAR Y SUBIR A DRIVE ---
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
 metric_filename = f"metricas_xrp_{timestamp}.csv"
 df_filename = f"xrp2025_{timestamp}.csv"
-graph_filename = f"grafico_metricas_xrp_{timestamp}.png"
 
-# Guardar local
 new_metric = pd.DataFrame([{
     "Timestamp": timestamp,
     "Top10Pct": round(pct_top10, 2),
@@ -162,47 +180,63 @@ new_metric = pd.DataFrame([{
     "Top10000Pct": round(pct_top10000, 2)
 }])
 
+last_file_name, last_metrics_df = get_last_metric_file()
+if not metrics_are_different(new_metric, last_metrics_df):
+    print("No hay cambios detectados en métricas. No se guarda ni envía nada.")
+    exit(0)
+
 new_metric.to_csv(metric_filename, index=False)
 df.to_csv(df_filename, index=False)
 
-# Subir a Drive
 upload_to_drive(metric_filename, "text/csv")
 upload_to_drive(df_filename, "text/csv")
 
-# --- DESCARGAR HISTÓRICO DESDE DRIVE ---
+last_df_filename, last_df = get_last_balance_file()
+cambios_texto = ""
+if last_df is not None:
+    changes_df = compare_wallets(df, last_df)
+    if not changes_df.empty:
+        cambios_filename = f"cambios_balances_{timestamp}.csv"
+        changes_df.to_csv(cambios_filename, index=False)
+        upload_to_drive(cambios_filename, "text/csv")
+        send_telegram_document(cambios_filename)
+        for _, row in changes_df.iterrows():
+            direccion = row['Wallet']
+            nombre = row['Owner'] if pd.notnull(row['Owner']) else "-"
+            cambio = row['Balance Change']
+            simbolo = "🔼" if cambio > 0 else "🔽"
+            cambios_texto += f"{simbolo} `{direccion}` ({nombre}): {cambio:,.0f} XRP\n"
+
 all_files = list_drive_csv_files()
 all_dfs = [download_csv_from_drive(f["id"]) for f in all_files]
 all_metrics = pd.concat(all_dfs, ignore_index=True).sort_values("Timestamp")
 
-# --- GRAFICO DE LÍNEAS HISTÓRICO ---
-plt.figure(figsize=(12, 6))
-plt.plot(all_metrics["Timestamp"], all_metrics["Top10Pct"], label="Top 10%")
-plt.plot(all_metrics["Timestamp"], all_metrics["Top100Pct"], label="Top 100%")
-plt.plot(all_metrics["Timestamp"], all_metrics["Top1000Pct"], label="Top 1.000%")
-plt.plot(all_metrics["Timestamp"], all_metrics["Top10000Pct"], label="Top 10.000%")
-plt.xticks(rotation=45, ha="right", fontsize=8)
-plt.xlabel("Fecha")
-plt.ylabel("% de Supply")
-plt.title("Evolución de concentración XRP")
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.savefig(graph_filename)
-plt.close()
+for col, title in zip(["Top10Pct", "Top100Pct", "Top1000Pct", "Top10000Pct"],
+                      ["Top 10", "Top 100", "Top 1.000", "Top 10.000"]):
+    plt.figure(figsize=(10, 5))
+    plt.plot(all_metrics["Timestamp"], all_metrics[col], marker='o')
+    plt.xticks(rotation=45, ha="right", fontsize=8)
+    plt.xlabel("Fecha")
+    plt.ylabel("% del Supply")
+    plt.title(f"Evolución del {title} XRP")
+    plt.grid(True)
+    plt.tight_layout()
+    graph_name = f"{col}_evolucion_{timestamp}.png"
+    plt.savefig(graph_name)
+    plt.close()
+    upload_to_drive(graph_name, "image/png")
+    send_telegram_image(graph_name)
 
-upload_to_drive(graph_filename, "image/png")
-
-# --- TELEGRAM ---
 summary_message = (
-    f"🧠 *XRP Smart Report*\n"
+    f"🧠 *XRP Smart Report (Actualización detectada)*\n"
     f"🕓 {timestamp}\n"
     f"🔒 *Bloqueado:* {total_locked:,} XRP\n"
     f"📤 *En circulación:* {total_circulante:,} XRP\n"
     f"🐋 *% en Top 10:* {pct_top10:.2f}%\n"
     f"💯 *% en Top 100:* {pct_top100:.2f}%\n"
     f"🔢 *% en Top 1.000:* {pct_top1000:.2f}%\n"
-    f"🔟K *% en Top 10.000:* {pct_top10000:.2f}%"
+    f"🔟K *% en Top 10.000:* {pct_top10000:.2f}%\n\n"
+    f"📌 *Cambios en wallets:*\n{cambios_texto}"
 )
 
 send_telegram_message(summary_message)
-send_telegram_image(graph_filename)
