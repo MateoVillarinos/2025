@@ -128,6 +128,12 @@ while True:
 
 driver.quit()
 
+# --- VERIFICAR SI SE SCRAPEARON DATOS ---
+if not data:
+    send_telegram_message("⚠️ *XRP Alert:* No se pudo obtener datos.")
+    print("No se obtuvieron datos del scraping. El script finaliza.")
+    exit(0)
+
 # --- PROCESAMIENTO ---
 df = pd.DataFrame(data, columns=["Rank", "Wallet", "Owner", "Balance", "XRP Locked"])
 
@@ -152,7 +158,6 @@ pct_top100 = df.head(100)["Total Balance"].sum() / total_supply * 100
 pct_top1000 = df.head(1000)["Total Balance"].sum() / total_supply * 100
 pct_top10000 = df.head(10000)["Total Balance"].sum() / total_supply * 100
 
-# --- DEFINIR FILENAMES ---
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
 metric_filename = f"metricas_xrp_{timestamp}.csv"
 df_filename = f"xrp2025_{timestamp}.csv"
@@ -190,7 +195,7 @@ if not cambio_metricas and not cambio_balances:
     print("No hay cambios detectados. No se guarda ni se envía nada.")
     exit(0)
 
-# --- GUARDAR Y SUBIR ARCHIVOS ---
+# --- GUARDAR Y SUBIR ---
 new_metric.to_csv(metric_filename, index=False)
 df.to_csv(df_filename, index=False)
 if cambio_balances:
@@ -201,7 +206,7 @@ upload_to_drive(df_filename, "text/csv")
 if cambio_balances:
     upload_to_drive(cambios_filename, "text/csv")
 
-# --- GENERAR GRÁFICOS ---
+# --- GRÁFICOS ---
 metric_files = list_drive_csv_files("metricas_xrp_")
 metric_dfs = [download_csv_from_drive(f["id"]) for f in metric_files]
 all_metrics = pd.concat(metric_dfs, ignore_index=True).sort_values("Timestamp")
@@ -222,20 +227,18 @@ for col, title in zip(["Top10Pct", "Top100Pct", "Top1000Pct", "Top10000Pct"], ["
     send_telegram_image(graph_name)
 
 # --- MENSAJE FINAL TELEGRAM ---
-
-# Escapar cambios_texto también
 cambios_texto_escaped = escape_md(cambios_texto) if cambios_texto else "Sin cambios detectados."
 
 summary_message = (
-    f"🧠 *XRP Smart Report (Actualización detectada)*\\n"
-    f"🕓 {escape_md(timestamp)}\\n"
-    f"🔒 *Bloqueado:* {total_locked:,} XRP\\n"
-    f"📤 *En circulación:* {total_circulante:,} XRP\\n"
-    f"🐋 *% en Top 10:* {pct_top10:.2f}%\\n"
-    f"💯 *% en Top 100:* {pct_top100:.2f}%\\n"
-    f"🔢 *% en Top 1.000:* {pct_top1000:.2f}%\\n"
-    f"🔟K *% en Top 10.000:* {pct_top10000:.2f}%\\n\\n"
-    f"📌 *Cambios en wallets:*\\n{cambios_texto_escaped}"
+    f"🧠 *XRP Smart Report (Actualización detectada)*\n"
+    f"🕓 {escape_md(timestamp)}\n"
+    f"🔒 *Bloqueado:* {total_locked:,} XRP\n"
+    f"📤 *En circulación:* {total_circulante:,} XRP\n"
+    f"🐋 *% en Top 10:* {pct_top10:.2f}%\n"
+    f"💯 *% en Top 100:* {pct_top100:.2f}%\n"
+    f"🔢 *% en Top 1.000:* {pct_top1000:.2f}%\n"
+    f"🔟K *% en Top 10.000:* {pct_top10000:.2f}%\n\n"
+    f"📌 *Cambios en wallets:*\n{cambios_texto_escaped}"
 )
 
 send_telegram_message(summary_message)
